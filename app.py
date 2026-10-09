@@ -507,14 +507,101 @@ Return the label only.
         return False
 
 
+# ==================== DEPLOYMENT FALLBACK KNOWLEDGE ====================
+
+# The ChromaDB index is generated locally by embed_index.py and is not
+# committed to this repository. Keep a small, source-linked fallback so
+# the deployed app remains useful when that index is absent.
+FALLBACK_KNOWLEDGE = [
+    {
+        "title": "Big Brains | Official Homepage",
+        "category": "about and learning",
+        "url": "https://www.bigbrainss.com/",
+        "content": (
+            "Big Brains is an online learning platform. Its official homepage "
+            "promotes learning in technology, business, and design, with "
+            "self-paced learning and course content. The website also promotes "
+            "Learn With AI tools that can turn uploaded files into study "
+            "sessions, summaries, quizzes, flashcards, an AI tutor, and "
+            "voice-based self-evaluation. The site has a referral program with "
+            "Campus Partnerships Manager and Campus Ambassador roles. The "
+            "homepage describes a 10% team commission for Campus Partnerships "
+            "Managers and a 10% referral commission for Campus Ambassadors. "
+            "Users can also apply to become mentors. The homepage identifies "
+            "Chaudhary Shoaib Hamza as CEO and Founder. Check the official site "
+            "for current availability and updated details."
+        ),
+    },
+    {
+        "title": "Big Brains | AI Credits and Pricing",
+        "category": "pricing",
+        "url": "https://www.bigbrainss.com/pricing",
+        "content": (
+            "The official pricing page says AI credit pricing plans will appear "
+            "there shortly. Prices for courses, notes, and workshops are set "
+            "individually by instructors and displayed on each item's page "
+            "before purchase. The page says payments are processed manually; "
+            "users submit proof of payment and access is usually confirmed "
+            "within a few hours. Always check the live pricing page for updates."
+        ),
+    },
+    {
+        "title": "Big Brains | Courses Catalogue",
+        "category": "courses",
+        "url": "https://www.bigbrainss.com/courses",
+        "content": (
+            "The official courses catalogue describes courses in technology, "
+            "business, and design as learning areas promoted by Big Brains. "
+            "The current list of specific course titles and their availability "
+            "must be checked on the live official catalogue. Do not guess "
+            "individual course names, fees, or durations."
+        ),
+    },
+]
+
+
+def fallback_knowledge_context(query, limit=3):
+    """Return source-linked, curated official-site facts if Chroma is missing."""
+    query_terms = {
+        term.strip(".,?!:;()[]{}").lower()
+        for term in query.split()
+        if len(term.strip(".,?!:;()[]{}")) > 2
+    }
+
+    scored = []
+    for record in FALLBACK_KNOWLEDGE:
+        searchable = (
+            record["title"] + " " + record["category"] + " "
+            + record["content"]
+        ).lower()
+        score = sum(1 for term in query_terms if term in searchable)
+        scored.append((score, record))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    selected = [record for score, record in scored[:limit] if score > 0]
+
+    # For broad questions such as "What do you know about Big Brains?",
+    # always return the official homepage summary.
+    if not selected:
+        selected = [FALLBACK_KNOWLEDGE[0]]
+
+    return "\n\n---\n\n".join(
+        f"Title: {record['title']}\n"
+        f"Category: {record['category']}\n"
+        f"URL: {record['url']}\n"
+        f"Content:\n{record['content']}"
+        for record in selected
+    )
+
+
 # ==================== COURSE CATALOGUE RETRIEVAL ====================
 
 def retrieve_course_catalog():
-    """Retrieve every chunk belonging to the official course catalogue."""
+    """Retrieve official course catalogue records, with a safe deploy fallback."""
     collection = load_vector_collection()
 
     if collection is None:
-        return ""
+        return fallback_knowledge_context("courses catalogue available course titles", limit=2)
 
     try:
         result = collection.get(
@@ -565,8 +652,12 @@ def retrieve_course_catalog():
 def retrieve_knowledge(query, limit=MAX_KB_RESULTS):
     collection = load_vector_collection()
 
-    if collection is None or not query.strip():
+    if not query.strip():
         return ""
+
+    if collection is None:
+        print("ChromaDB index missing; using source-linked fallback knowledge.")
+        return fallback_knowledge_context(query, limit=limit)
 
     try:
         model = load_embedding_model()
@@ -1367,12 +1458,6 @@ if st.session_state.awaiting_reply:
 
                 if not in_scope:
                     assistant_reply = OUT_OF_SCOPE_REPLY
-
-                elif load_vector_collection() is None:
-                    assistant_reply = (
-                        "Sorry, the Big Brains knowledge base is "
-                        "currently unavailable. Please try again later."
-                    )
 
                 else:
                     client = Groq(api_key=api_key)
