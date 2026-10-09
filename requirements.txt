@@ -1,4 +1,6 @@
 streamlit
 groq
-requests
-beautifulsoup4
+chromadb
+sentence-transformers
+torch
+numpy
