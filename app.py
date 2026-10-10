@@ -550,11 +550,15 @@ FALLBACK_KNOWLEDGE = [
         "category": "courses",
         "url": "https://www.bigbrainss.com/courses",
         "content": (
-            "The official courses catalogue describes courses in technology, "
-            "business, and design as learning areas promoted by Big Brains. "
-            "The current list of specific course titles and their availability "
-            "must be checked on the live official catalogue. Do not guess "
-            "individual course names, fees, or durations."
+            "The official courses catalogue page currently displays the "
+            "message 'No courses available yet' in the latest website content "
+            "checked for this assistant. The homepage promotes technology, "
+            "business, and design as broad learning areas, but these are not "
+            "verified individual course listings. No specific course titles "
+            "or descriptions can be confirmed from the saved knowledge base. "
+            "Do not invent course names, fees, or durations. For the latest "
+            "status, check the official catalogue: "
+            "https://www.bigbrainss.com/courses"
         ),
     },
 ]
