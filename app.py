@@ -595,39 +595,52 @@ def fallback_knowledge_context(query, limit=3):
 
 
 # ==================== COURSE CATALOGUE RETRIEVAL ====================
-
 def retrieve_course_catalog():
-    """Retrieve official course catalogue records, with a safe deploy fallback."""
+    """Retrieve course catalogue records from ChromaDB with a safe fallback."""
     collection = load_vector_collection()
 
     if collection is None:
-        return fallback_knowledge_context("courses catalogue available course titles", limit=2)
+        return fallback_knowledge_context(
+            "courses catalogue available course titles",
+            limit=2,
+        )
 
     try:
         result = collection.get(
-            where={"title": "Courses | Big Brains"},
             include=["documents", "metadatas"],
         )
 
         documents = result.get("documents", []) or []
         metadatas = result.get("metadatas", []) or []
 
-        records = list(zip(metadatas, documents))
+        records = []
+
+        for metadata, document in zip(metadatas, documents):
+            metadata = metadata or {}
+
+            if not document or not document.strip():
+                continue
+
+            title = str(metadata.get("title", "")).lower()
+            category = str(metadata.get("category", "")).lower()
+            url = str(metadata.get("url", "")).lower()
+
+            if (
+                "course" in title
+                or "course" in category
+                or "/courses" in url
+            ):
+                records.append((metadata, document))
 
         records.sort(
             key=lambda item: int(
-                item[0].get("chunk_index", 0)
+                (item[0] or {}).get("chunk_index", 0)
             )
         )
 
         context_parts = []
 
         for metadata, document in records:
-            metadata = metadata or {}
-
-            if not document or not document.strip():
-                continue
-
             context_parts.append(
                 f"Title: {metadata.get('title', 'Courses | Big Brains')}\n"
                 f"Category: {metadata.get('category', 'courses')}\n"
@@ -635,17 +648,23 @@ def retrieve_course_catalog():
                 f"Content:\n{document}"
             )
 
-        print(
-            "Course catalogue chunks retrieved:",
-            len(context_parts),
-        )
+        print("Course catalogue chunks retrieved:", len(context_parts))
 
-        return "\n\n---\n\n".join(context_parts)
+        if context_parts:
+            return "\n\n---\n\n".join(context_parts)
+
+        return fallback_knowledge_context(
+            "courses catalogue available course titles",
+            limit=2,
+        )
 
     except Exception as error:
         print("Course catalogue retrieval error:", repr(error))
-        return ""
 
+        return fallback_knowledge_context(
+            "courses catalogue available course titles",
+            limit=2,
+        )
 
 # ==================== SEMANTIC KNOWLEDGE RETRIEVAL ====================
 
